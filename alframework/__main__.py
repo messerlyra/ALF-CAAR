@@ -259,11 +259,11 @@ if testing:
 # Step 5: Bootstraping #
 ########################
     
-#If there is no data and no models, start boostrap jobs
+#If there is no data and no models, start bootstrap jobs
 if status['current_h5_id'] == 0 and status['current_model_id'] < 0:
     print("Building Bootstrap Set")
     while QM_task_queue.get_exec_done_number() < master_config['bootstrap_set']:
-        if QM_task_queue.get_queued_number() < master_config['target_queued_QM']:
+        if QM_task_queue.get_queued_number() + QM_task_queue.get_exec_done_number() < master_config['target_queued_QM']:
             while builder_task_queue.get_number() * master_config.get('maximum_builder_structures', 1) < master_config['parallel_samplers']:
                 moleculeids = ['mol-boot-{:010d}'.format(it_ind) for it_ind in
                                range(status['current_molecule_id'], status['current_molecule_id'] + master_config.get('maximum_builder_structures', 1))
@@ -316,6 +316,8 @@ if status['current_h5_id'] == 0 and status['current_model_id'] < 0:
     status['current_h5_id'] = status['current_h5_id'] + 1
     
 if status['current_model_id'] < 0:
+    print("Temporarily disabled ML training, talk to Richard")
+    exit()
     task_input = build_input_dict(ml_task.func,
                                   [{"ML_config": ML_config}, *all_configs, status],
                                   raise_on_fail=True)
