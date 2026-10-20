@@ -232,24 +232,33 @@ if args.test_qm:
 #train_ANI_model_task(configuration,data_directory,model_path,model_index,remove_existing=False):
 if args.test_ml:
     #configuration,data_directory,model_path,model_index,remove_existing=False
-    task_input = build_input_dict(ml_task.func,
-                                  [{"ML_config": ML_config}, *all_configs, status],
+    for i in range(2):
+        task_status = status.copy()
+        task_status['current_training_id'] = status['current_training_id'] + i
+        print("Current training ID: "+str(task_status['current_training_id']))
+        task_input = build_input_dict(ml_task.func,
+                                  [{"ML_config": ML_config}, *all_configs, task_status],
                                   raise_on_fail=True)
-    ML_task_queue.add_task(ml_task(**task_input))
-    status['current_training_id'] = status['current_training_id'] + 1
+        ML_task_queue.add_task(ml_task(**task_input))
+    status['current_training_id'] = status['current_training_id'] + 2
     with open(master_config['status_path'], "w") as outfile:
         json.dump(status, outfile, indent=2)
-    ml_result = ML_task_queue.task_list[0].result()
-    queue_output = ML_task_queue.get_task_results()
-    returned_models = queue_output[0]
+
+    while ML_task_queue.get_exec_done_number() < 2:
+        time.sleep(10)
+    ML_results, failed = ML_task_queue.get_task_results()
+    #ml_result = ML_task_queue.task_list[0].result()
+    #queue_output = ML_task_queue.get_task_results()
+    #returned_models = queue_output[0]
     print("ML ensemble training status:")
-    print(returned_models)
-    for network in returned_models:
-        if all(network[0]) and (network[1] > status['current_model_id']):
-            print('New Model: {:04d}'.format(network[1]))
-            status['current_model_id'] = network[1]
-    with open(master_config['status_path'], "w") as outfile:
-        json.dump(status, outfile, indent=2)
+    ML_task_queue.print_status()
+    #print(returned_models)
+    #for network in returned_models:
+    #    if all(network[0]) and (network[1] > status['current_model_id']):
+    #        print('New Model: {:04d}'.format(network[1]))
+    #        status['current_model_id'] = network[1]
+    #with open(master_config['status_path'], "w") as outfile:
+    #    json.dump(status, outfile, indent=2)
     testing=True
     
 if testing:
