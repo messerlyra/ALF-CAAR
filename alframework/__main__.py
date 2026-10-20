@@ -362,6 +362,9 @@ if status['current_model_id'] < 0:
     with open(master_config['status_path'], "w") as outfile:
         json.dump(status, outfile, indent=2)
 
+    print("Finished bootstrapping")
+    exit()
+
 ##################################
 ## Step 6: Begin Active Learning #
 ##################################
@@ -476,6 +479,9 @@ while True:
                 print('New Model: {:04d}'.format(network[1]))
                 status['current_model_id'] = network[1]
                 status['current_molecule_id'] = 0
+
+        print("Finished measuring FOM")
+        exit()
     
     # Construct analysis plots
     if (master_loop_iter % master_config.get('update_plots_every', 1000) == 0) and (analysis_plot is not None):
