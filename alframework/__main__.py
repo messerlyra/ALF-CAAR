@@ -448,6 +448,7 @@ while True:
                 QM_task_queue.add_task(qm_task(**task_input))
 
     # Train more models
+    n_experts = master_config.get("n_experts", 1)
     if (QM_task_queue.get_completed_number() > master_config['save_h5_threshold']) and (ML_task_queue.get_number() < 1):
         #print(QM_task_queue.task_list[0].result())
     	  #store_current_data(h5path, system_data, properties):
@@ -459,14 +460,15 @@ while True:
 #        with open('data-bk-{:04d}.pickle'.format(status['current_h5_id']),'wb') as pkbk: 
 #            pickle.dump(results_list,pkbk)
         status['current_h5_id'] = status['current_h5_id'] + 1
-        task_input = build_input_dict(ml_task.func,
+        for i in range(n_experts): 
+            task_input = build_input_dict(ml_task.func,
                                       [{"ML_config": ML_config}, *all_configs, status],
                                       raise_on_fail=True)
-        ML_task_queue.add_task(ml_task(**task_input))
-        status['current_training_id'] = status['current_training_id'] + 1
+            ML_task_queue.add_task(ml_task(**task_input))
+            status['current_training_id'] = status['current_training_id'] + 1
         
     # Update Model
-    if ML_task_queue.get_completed_number() > 0:
+    if ML_task_queue.get_completed_number() >= n_experts:
         output, failed = ML_task_queue.get_task_results()
         status['lifetime_failed_ML_tasks'] = status['lifetime_failed_ML_tasks'] + failed
         for network in output:
