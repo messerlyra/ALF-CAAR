@@ -350,9 +350,10 @@ if status['current_model_id'] < 0:
     
     # Process all returned bootstrap results to find the highest valid model ID
     for network in returned_models:
-        if all(network[0]) and network[1] > status['current_model_id']:
-            print('New Model: {:04d}'.format(network[1]))
-            status['current_model_id'] = network[1]
+        if all(network[0]):
+            if network[1] > status['current_model_id']:
+                print('New Model: {:04d}'.format(network[1]))
+                status['current_model_id'] = network[1]
         else:
             print("Bootstrap networks failed to train")
             print("User Investigation Required")
