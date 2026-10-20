@@ -359,6 +359,9 @@ if status['current_model_id'] < 0:
             print("User Investigation Required")
             exit()
 
+    with open(master_config['status_path'], "w") as outfile:
+        json.dump(status, outfile, indent=2)
+
 ##################################
 ## Step 6: Begin Active Learning #
 ##################################
