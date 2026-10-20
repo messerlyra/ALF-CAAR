@@ -323,25 +323,40 @@ if status['current_h5_id'] == 0 and status['current_model_id'] < 0:
                        results_list,
                        master_config['properties_list'])
     status['current_h5_id'] = status['current_h5_id'] + 1
-    
-if status['current_model_id'] < 0:
-    task_input = build_input_dict(ml_task.func,
-                                  [{"ML_config": ML_config}, *all_configs, status],
-                                  raise_on_fail=True)
-    ML_task_queue.add_task(ml_task(**task_input))
-    
-    status['current_training_id'] = status['current_training_id'] + 1
-    
+
+if status['current_model_id'] < 0: 
+    n_experts = master_config.get("n_experts", 1)
+    for i in range(n_experts):
+        task_input = build_input_dict(
+            ml_task.func,
+            [{"ML_config": ML_config}, *all_configs, status],
+            raise_on_fail=True
+        )
+        
+        ML_task_queue.add_task(ml_task(**task_input))
+        status['current_training_id'] = status['current_training_id'] + 1
+
     with open(master_config['status_path'], "w") as outfile:
         json.dump(status, outfile, indent=2)
-    network = ML_task_queue.task_list[0].result()
-    if all(network[0]):
-        status['current_model_id'] = network[1]
-    else:
-        print("Bootstrap network failed to train")
-        print("User Investigation Required")
-        exit()
 
+    while ML_task_queue.get_exec_done_number() < n_experts:
+        print("ML bootstrap training status:")
+        ML_task_queue.print_status()
+        time.sleep(30)
+
+    queue_output = ML_task_queue.get_task_results()
+    returned_models = queue_output[0]
+    print(f"{returned_models=}")
+    
+    # Process all returned bootstrap results to find the highest valid model ID
+    for network in returned_models:
+        if all(network[0]) and network[1] > status['current_model_id']:
+            print('New Model: {:04d}'.format(network[1]))
+            status['current_model_id'] = network[1]
+        else:
+            print("Bootstrap networks failed to train")
+            print("User Investigation Required")
+            exit()
 
 ##################################
 ## Step 6: Begin Active Learning #
