@@ -475,5 +475,5 @@ while True:
         json.dump(status, outfile, indent=2)
    
     master_loop_iter += 1
-    time.sleep(60)
+    time.sleep(10)
 	
