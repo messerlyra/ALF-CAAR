@@ -372,7 +372,8 @@ while True:
 	
     # Run more builders
     if (QM_task_queue.get_queued_number() < master_config['target_queued_QM']) and \
-            (QM_task_queue.get_number() < master_config.get('maximum_completed_QM', 1e12)):
+            (QM_task_queue.get_number() < master_config.get('maximum_completed_QM', 1e12)) and \
+            (ML_task_queue.get_number() < 1):
         while sampler_task_queue.get_number() + builder_task_queue.get_number() * master_config.get('maximum_builder_structures', 1) \
                 < master_config['parallel_samplers']:
             moleculeids = ['mol-{:04d}-{:010d}'.format(status['current_model_id'], it_ind) for it_ind in
@@ -448,6 +449,11 @@ while True:
                 print('New Model: {:04d}'.format(network[1]))
                 status['current_model_id'] = network[1]
                 status['current_molecule_id'] = 0
+        
+        ###RAM: End FOM measurement once ML has finished
+        print("Finished measuring FOM")
+        sys.stdout.flush()
+        exit()
     
     # Construct analysis plots
     if (master_loop_iter % master_config.get('update_plots_every', 1000) == 0) and (analysis_plot is not None):
@@ -468,11 +474,6 @@ while True:
     with open(master_config['status_path'], "w") as outfile:
         json.dump(status, outfile, indent=2)
    
-    ###RAM: End FOM measurement once ML has finished
-    if ML_task_queue.get_completed_number() > 0:
-        print("Finished measuring FOM")
-        exit()
-
     master_loop_iter += 1
     time.sleep(60)
 	
