@@ -467,7 +467,12 @@ while True:
     
     with open(master_config['status_path'], "w") as outfile:
         json.dump(status, outfile, indent=2)
-    
+   
+    ###RAM: End FOM measurement once ML has finished
+    if ML_task_queue.get_completed_number() > 0:
+        print("Finished measuring FOM")
+        exit()
+
     master_loop_iter += 1
     time.sleep(60)
 	
