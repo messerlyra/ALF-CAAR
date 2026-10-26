@@ -316,8 +316,6 @@ if status['current_h5_id'] == 0 and status['current_model_id'] < 0:
     status['current_h5_id'] = status['current_h5_id'] + 1
     
 if status['current_model_id'] < 0:
-    print("Temporarily disabled ML training, talk to Richard")
-    exit()
     task_input = build_input_dict(ml_task.func,
                                   [{"ML_config": ML_config}, *all_configs, status],
                                   raise_on_fail=True)
@@ -330,6 +328,8 @@ if status['current_model_id'] < 0:
     network = ML_task_queue.task_list[0].result()
     if all(network[0]):
         status['current_model_id'] = network[1]
+        print("Bootstrap network trained successfully")
+        exit()
     else:
         print("Bootstrap network failed to train")
         print("User Investigation Required")
@@ -410,17 +410,19 @@ while True:
                     sampler_task_queue.add_task(sampler_task(**task_input))
 
     # Run more QM
-    if sampler_task_queue.get_completed_number() > master_config['minimum_QM']:
+    if sampler_task_queue.get_completed_number() > master_config['minimum_QM'] and (ML_task_queue.get_number() < 1):
         sampler_results, failed = sampler_task_queue.get_task_results()
         status['lifetime_failed_sampler_tasks'] = status['lifetime_failed_sampler_tasks'] + failed
+        count_QM_tasks = 0
         for structure in sampler_results: #may need [0]
             assert isinstance(structure, MoleculesObject), 'structure must be a MoleculesObject instance'
-            if structure.get_atoms() is not None:
+            if structure.get_atoms() is not None and count_QM_tasks < master_config['target_queued_QM']:
                 task_input = build_input_dict(qm_task.func,
                                               [{"molecule_object": structure, "QM_config": QM_config}, master_config,
                                                *all_configs, status],
                                               raise_on_fail=True)
                 QM_task_queue.add_task(qm_task(**task_input))
+                count_QM_tasks += 1
 
     # Train more models
     if (QM_task_queue.get_completed_number() > master_config['save_h5_threshold']) and (ML_task_queue.get_number() < 1):
