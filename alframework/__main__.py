@@ -1,12 +1,14 @@
 ###################################
 # Step 1: Specify a configuration #
 ###################################
+import time
+import sys
+print(f"[{time.ctime()}] >>> ALF STARTED: Initializing configuration and queues.")
+sys.stdout.flush()
 
 import os
 import json
 import pickle
-import time
-import sys
 from multiprocessing import Process
 from pathlib import Path
 import numpy as np
@@ -340,6 +342,12 @@ if status['current_model_id'] < 0:
 ## Step 6: Begin Active Learning #
 ##################################
 master_loop_iter = 1
+###RAM: Including these checks to ensure only one loop of ALF
+submitted_builders = False
+submitted_QM = False
+submitted_ML = False
+print(f"[{time.ctime()}] -> Entering main active learning loop...")
+sys.stdout.flush()
 while True:
     #Re-load configurations, but watch for stupid errors
     try:
@@ -373,7 +381,10 @@ while True:
     # Run more builders
     if (QM_task_queue.get_queued_number() < master_config['target_queued_QM']) and \
             (QM_task_queue.get_number() < master_config.get('maximum_completed_QM', 1e12)) and \
-            (ML_task_queue.get_number() < 1):
+            (ML_task_queue.get_number() < 1) and not submitted_builders:
+        submitted_builders = True
+        print(f"[{time.ctime()}] -> Sending structures to BUILDER...")
+        sys.stdout.flush()
         while sampler_task_queue.get_number() + builder_task_queue.get_number() * master_config.get('maximum_builder_structures', 1) \
                 < master_config['parallel_samplers']:
             moleculeids = ['mol-{:04d}-{:010d}'.format(status['current_model_id'], it_ind) for it_ind in
@@ -385,11 +396,19 @@ while True:
                                           raise_on_fail=True)
             builder_task_queue.add_task(builder_task(**task_input))
             status['current_molecule_id'] = status['current_molecule_id'] + master_config.get('maximum_builder_structures',1)
+        print(f"[{time.ctime()}] <- BUILDER tasks queued.")
+        sys.stdout.flush()
             
-    # Builders go stright into samplers
+    # Builders go straight into samplers
     if builder_task_queue.get_exec_done_number() > 0:
+        print(f"[{time.ctime()}] <- BUILDER finished.")
+        sys.stdout.flush()
         structure_list, failed = builder_task_queue.get_task_results()
+        print(f"[{time.ctime()}] <- BUILDER processed.")
+        sys.stdout.flush()
         status['lifetime_failed_builder_tasks'] = status['lifetime_failed_builder_tasks'] + failed
+        print(f"[{time.ctime()}] -> Sending structures to SAMPLER...")
+        sys.stdout.flush()
         # Douple loop to facilitate possiblitiy of multiple sctructures returned by builder
         for structure in structure_list:
             # If builders return a single structure:
@@ -408,11 +427,20 @@ while True:
                                                    *all_configs, status],
                                                   raise_on_fail=True)
                     sampler_task_queue.add_task(sampler_task(**task_input))
+        print(f"[{time.ctime()}] <- SAMPLER tasks queued.")
+        sys.stdout.flush()
 
     # Run more QM
-    if sampler_task_queue.get_completed_number() > master_config['minimum_QM'] and (ML_task_queue.get_number() < 1):
+    if sampler_task_queue.get_completed_number() > master_config['minimum_QM'] and (ML_task_queue.get_number() < 1) and not submitted_QM:
+        submitted_QM = True
+        print(f"[{time.ctime()}] <- SAMPLER finished.")
+        sys.stdout.flush()
         sampler_results, failed = sampler_task_queue.get_task_results()
+        print(f"[{time.ctime()}] <- SAMPLER processed.")
+        sys.stdout.flush()
         status['lifetime_failed_sampler_tasks'] = status['lifetime_failed_sampler_tasks'] + failed
+        print(f"[{time.ctime()}] -> Sending structures to QM...")
+        sys.stdout.flush()
         count_QM_tasks = 0
         for structure in sampler_results: #may need [0]
             assert isinstance(structure, MoleculesObject), 'structure must be a MoleculesObject instance'
@@ -423,28 +451,45 @@ while True:
                                               raise_on_fail=True)
                 QM_task_queue.add_task(qm_task(**task_input))
                 count_QM_tasks += 1
+        print(f"[{time.ctime()}] -> QM tasks queued.")
+        sys.stdout.flush()
 
     # Train more models
-    if (QM_task_queue.get_completed_number() > master_config['save_h5_threshold']) and (ML_task_queue.get_number() < 1):
+    if (QM_task_queue.get_completed_number() > master_config['save_h5_threshold']) and (ML_task_queue.get_number() < 1) and not submitted_ML:
+        submitted_ML = True
+        print(f"[{time.ctime()}] <- QM finished.")
+        sys.stdout.flush()
         #print(QM_task_queue.task_list[0].result())
     	  #store_current_data(h5path, system_data, properties):
         results_list, failed = QM_task_queue.get_task_results()
+        print(f"[{time.ctime()}] <- QM processed.")
+        sys.stdout.flush()
         status['lifetime_failed_QM_tasks'] = status['lifetime_failed_QM_tasks'] + failed
         #with open('temp-{:04d}.pkl'.format(status['current_h5_id']),'wb') as pickle_file:
         #    pickle.dump(results_list,pickle_file)
         store_current_data(master_config['h5_path'].format(status['current_h5_id']), results_list, master_config['properties_list'])
 #        with open('data-bk-{:04d}.pickle'.format(status['current_h5_id']),'wb') as pkbk: 
 #            pickle.dump(results_list,pkbk)
+        print(f"[{time.ctime()}] <- Data stored to H5.")
+        sys.stdout.flush()
         status['current_h5_id'] = status['current_h5_id'] + 1
+        print(f"[{time.ctime()}] -> Sending dataset to ML...")
+        sys.stdout.flush()
         task_input = build_input_dict(ml_task.func,
                                       [{"ML_config": ML_config}, *all_configs, status],
                                       raise_on_fail=True)
         ML_task_queue.add_task(ml_task(**task_input))
         status['current_training_id'] = status['current_training_id'] + 1
+        print(f"[{time.ctime()}] -> ML task queued.")
+        sys.stdout.flush()
         
     # Update Model
     if ML_task_queue.get_completed_number() > 0:
+        print(f"[{time.ctime()}] <- ML finished.")
+        sys.stdout.flush()
         output, failed = ML_task_queue.get_task_results()
+        print(f"[{time.ctime()}] <- ML processed.")
+        sys.stdout.flush()
         status['lifetime_failed_ML_tasks'] = status['lifetime_failed_ML_tasks'] + failed
         for network in output:
             if all(network[0]) and (network[1] > status['current_model_id']):
@@ -453,7 +498,7 @@ while True:
                 status['current_molecule_id'] = 0
         
         ###RAM: End FOM measurement once ML has finished
-        print("Finished measuring FOM")
+        print(f"[{time.ctime()}] <- Finished measuring FOM.")
         sys.stdout.flush()
         exit()
     
@@ -462,20 +507,22 @@ while True:
         analysis_input = build_input_dict(analysis_plot, all_configs)
         Process(target=analysis_plot, kwargs=analysis_input).start()
                 
-    print("### Active Learning Status at: " + time.ctime() + " ###")
-    print("builder status:")
-    builder_task_queue.print_status()
-    print("sampling status:")
-    sampler_task_queue.print_status()
-    print("QM status:")
-    QM_task_queue.print_status()
-    print("ML status:")
-    ML_task_queue.print_status()
-    sys.stdout.flush()
+
+    if master_loop_iter % 60 == 0:
+        print("### Active Learning Status at: " + time.ctime() + " ###")
+        print("builder status:")
+        builder_task_queue.print_status()
+        print("sampling status:")
+        sampler_task_queue.print_status()
+        print("QM status:")
+        QM_task_queue.print_status()
+        print("ML status:")
+        ML_task_queue.print_status()
+        sys.stdout.flush()
     
     with open(master_config['status_path'], "w") as outfile:
         json.dump(status, outfile, indent=2)
    
     master_loop_iter += 1
-    time.sleep(10)
+    time.sleep(1)
 	
