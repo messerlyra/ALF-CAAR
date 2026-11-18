@@ -467,7 +467,13 @@ while True:
         status['lifetime_failed_QM_tasks'] = status['lifetime_failed_QM_tasks'] + failed
         #with open('temp-{:04d}.pkl'.format(status['current_h5_id']),'wb') as pickle_file:
         #    pickle.dump(results_list,pickle_file)
-        store_current_data(master_config['h5_path'].format(status['current_h5_id']), results_list, master_config['properties_list'])
+        successful_QM_count = len(results_list) - failed
+        n_QM_batches = int(master_config['parallel_samplers'] / successful_QM_count) if successful_QM_count > 0 else 1
+        if n_QM_batches != 1:
+            for i in range(n_QM_batches):
+                store_current_data(master_config['h5_path'].format(status['current_h5_id']).replace('.h5', f'_copy_{i}.h5'), results_list, master_config['properties_list'])
+        else:
+            store_current_data(master_config['h5_path'].format(status['current_h5_id']), results_list, master_config['properties_list'])
 #        with open('data-bk-{:04d}.pickle'.format(status['current_h5_id']),'wb') as pkbk: 
 #            pickle.dump(results_list,pkbk)
         print(f"[{time.ctime()}] <- Data stored to H5.")
