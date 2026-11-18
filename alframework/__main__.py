@@ -467,7 +467,7 @@ while True:
         status['lifetime_failed_QM_tasks'] = status['lifetime_failed_QM_tasks'] + failed
         #with open('temp-{:04d}.pkl'.format(status['current_h5_id']),'wb') as pickle_file:
         #    pickle.dump(results_list,pickle_file)
-        successful_QM_count = len(results_list) - failed
+        successful_QM_count = len(results_list)
         n_QM_batches = int(master_config['parallel_samplers'] / successful_QM_count) if successful_QM_count > 0 else 1
         if n_QM_batches != 1:
             for i in range(n_QM_batches):
