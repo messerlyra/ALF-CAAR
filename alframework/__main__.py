@@ -467,13 +467,27 @@ while True:
         status['lifetime_failed_QM_tasks'] = status['lifetime_failed_QM_tasks'] + failed
         #with open('temp-{:04d}.pkl'.format(status['current_h5_id']),'wb') as pickle_file:
         #    pickle.dump(results_list,pickle_file)
+        print(f"[{time.ctime()}] <- Storing data to H5.")
+        target_QM = master_config['parallel_samplers']
         successful_QM_count = len(results_list)
-        n_QM_batches = int(master_config['parallel_samplers'] / successful_QM_count) if successful_QM_count > 0 else 1
-        if n_QM_batches != 1:
-            for i in range(n_QM_batches):
-                store_current_data(master_config['h5_path'].format(status['current_h5_id']).replace('.h5', f'_copy_{i}.h5'), results_list, master_config['properties_list'])
+        base_path = master_config['h5_path'].format(status['current_h5_id'])
+        if successful_QM_count > 0:
+            full_copies, remainder_count = divmod(target_QM, successful_QM_count)
+        if full_copies == 1 and remainder_count == 0:
+            store_current_data(base_path, results_list, master_config['properties_list'])
         else:
-            store_current_data(master_config['h5_path'].format(status['current_h5_id']), results_list, master_config['properties_list'])
+            for i in range(full_copies):
+                store_current_data(base_path.replace('.h5', f'_copy_{i}.h5'), results_list, master_config['properties_list'])
+            if remainder_count > 0:
+                store_current_data(base_path.replace('.h5', f'_copy_partial.h5'), results_list[:remainder_count], master_config['properties_list'])
+
+        #successful_QM_count = len(results_list)
+        #n_QM_batches = int(master_config['parallel_samplers'] / successful_QM_count) if successful_QM_count > 0 else 1
+        #if n_QM_batches != 1:
+        #    for i in range(n_QM_batches):
+        #        store_current_data(master_config['h5_path'].format(status['current_h5_id']).replace('.h5', f'_copy_{i}.h5'), results_list, master_config['properties_list'])
+        #else:
+        #    store_current_data(master_config['h5_path'].format(status['current_h5_id']), results_list, master_config['properties_list'])
 #        with open('data-bk-{:04d}.pickle'.format(status['current_h5_id']),'wb') as pkbk: 
 #            pickle.dump(results_list,pkbk)
         print(f"[{time.ctime()}] <- Data stored to H5.")
